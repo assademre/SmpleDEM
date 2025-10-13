@@ -23,7 +23,6 @@ class Particle:
         self.velocity = np.array([vx, vy], dtype=float)
         self.radius = radius
         self.density = density
-        # Mass proportional to area (2D) and density
         self.mass = np.pi * radius**2 * density
         
         # Collision tracking (Sprint 2)

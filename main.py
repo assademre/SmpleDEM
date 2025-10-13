@@ -15,6 +15,8 @@ BACKGROUND_COLOR:tuple = (20, 20, 30)
 PARTICLE_COLOR:tuple = (100, 200, 255)
 COLLISION_COLOR:tuple = (255, 100, 100)  # Color red
 GRAVITY:float = 9.81
+STARTING_PARTICLES = 2
+MAX_PARTICLES = 300
 
 
 def main():
@@ -26,12 +28,22 @@ def main():
     
     # Initialize simulation
     sim = DEMSimulation(width=WIDTH, height=HEIGHT, gravity=GRAVITY)
-    
+
+    # sim.add_particle(Particle(x=200, y=50, vx=50, vy=0, radius=15, density=1.0))
+    # sim.add_particle(Particle(x=400, y=100, vx=-30, vy=0, radius=20, density=1.0))
+    # sim.add_particle(Particle(x=600, y=80, vx=-20, vy=50, radius=12, density=1.0))
+    # sim.add_particle(Particle(x=300, y=150, vx=40, vy=20, radius=25, density=1.0))
+
     # Addding particles
-    sim.add_particle(Particle(x=200, y=50, vx=50, vy=0, radius=15, density=1.0))
-    sim.add_particle(Particle(x=400, y=100, vx=-30, vy=0, radius=20, density=1.0))
-    sim.add_particle(Particle(x=600, y=80, vx=-20, vy=50, radius=12, density=1.0))
-    sim.add_particle(Particle(x=300, y=150, vx=40, vy=20, radius=25, density=1.0))
+    sim.max_particles = MAX_PARTICLES
+    print(f"Creating {STARTING_PARTICLES} initial particles...")
+    for i in range(STARTING_PARTICLES):
+        x = np.random.randint(50, WIDTH - 50)
+        y = np.random.randint(50, 150)
+        vx = np.random.uniform(-50, 50)
+        vy = np.random.uniform(0, 50)
+        radius = np.random.randint(10, 25)
+        sim.add_particle(Particle(x, y, vx, vy, radius, density=1.0))
     
     # Main loop
     running = True
@@ -72,7 +84,7 @@ def main():
             pygame.draw.circle(screen, (255, 255, 255), pos, 2)  # center dot
         
         # Info text
-        info_text = info_font.render(f"Particles: {sim.get_particle_count()}", True, (255, 255, 255))
+        info_text = info_font.render(f"Particles: {sim.get_particle_count()}/{sim.max_particles}", True, (255, 255, 255))
         screen.blit(info_text, (10, 10))
         
         time_text = info_font.render(f"Time: {sim.time:.1f}s", True, (255, 255, 255))
@@ -82,10 +94,15 @@ def main():
             collisions_text = info_font.render(f"Collisions: {sim.total_collisions}", True, (255, 255, 255))
             screen.blit(collisions_text, (10, 60))
 
+        if hasattr(sim, 'total_fragments_created'):
+            fragments_text = info_font.render(f"Fragments Created: {sim.total_fragments_created}", True,
+                                              (100, 255, 100))
+            screen.blit(fragments_text, (10, 85))
+
         if hasattr(sim, 'collision_energies') and len(sim.collision_energies) > 0:
             avg_energy = np.mean(sim.collision_energies[-10:])
             energy_text = info_font.render(f"Avg Energy: {avg_energy:.1f} J", True, (255, 255, 100))
-            screen.blit(energy_text, (10, 85))
+            screen.blit(energy_text, (10, 110))
 
         help_text = info_font.render("SPACE: Add particle, ESC: Quit", True, (150, 150, 150))
         screen.blit(help_text, (10, HEIGHT - 30))

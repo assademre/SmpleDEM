@@ -38,11 +38,19 @@ class DEMSimulation:
         self.total_fragments_created = 0
         self.particles_to_add = []  # Buffer for new fragments
         self.particles_to_remove = []  # Buffer for broken particles
+        self.max_particles = 150  # Safety cap
+        self.initial_total_energy = 0.0
+        self.energy_lost_to_fragmentation = 0.0
 
     def add_particle(self, particle):
         """Add particle"""
-        self.particles.append(particle)
-        
+        if len(self.particles) < self.max_particles:
+            self.particles.append(particle)
+            return True
+        else:
+            print(f"Particle limit reached ({self.max_particles})")
+            return False
+
     def apply_gravity(self, dt):
         """Apply gravitational force"""
         gravity_force = np.array([0, self.gravity])
@@ -105,24 +113,30 @@ class DEMSimulation:
         self.total_collisions += 1
         self.collision_energies.append(impact_energy)
 
-        if impact_energy > 100:  # Only print high-energy collisions
-            print(f"Collision #{self.total_collisions}: Energy = {impact_energy:.2f} J")
-
-        # TODO: Check for fragmentation
+        # Check for fragmentation
+        fragmented = False
         if impact_energy > self.energy_threshold:
-            # Mark particles for fragmentation if large enough??
+            # Mark particles for fragmentation if large enough
             if p1.radius >= self.min_fragment_radius:
                 self.mark_for_fragmentation(p1, impact_energy)
+                fragmented = True
             if p2.radius >= self.min_fragment_radius:
                 self.mark_for_fragmentation(p2, impact_energy)
+                fragmented = True
 
-        # Elastic collision
-        restitution_factor = 1.0 + self.restitution
-        impulse = restitution_factor * velocity_along_normal / (1/p1.mass + 1/p2.mass)
+        if impact_energy > 100 or fragmented:  # high energy collisions and fragmentations
+            frag_text = " [FRAGMENTATION]" if fragmented else ""
+            print(f"Collision #{self.total_collisions}: Energy = {impact_energy:.2f} J{frag_text}")
 
-        # Apply impulse to both particles
-        p1.velocity -= (impulse / p1.mass) * normal
-        p2.velocity += (impulse / p2.mass) * normal
+        # Only apply collision response if neither particle fragmenting
+        if not fragmented:
+            # Elastic collision
+            restitution_factor = 1.0 + self.restitution
+            impulse = restitution_factor * velocity_along_normal / (1/p1.mass + 1/p2.mass)
+
+            # Apply impulse to both particles
+            p1.velocity -= (impulse / p1.mass) * normal
+            p2.velocity += (impulse / p2.mass) * normal
 
         # Separate overlapping particles
         overlap = (p1.radius + p2.radius) - distance
@@ -139,6 +153,10 @@ class DEMSimulation:
             particle: Particle to fragment
             impact_energy: Energy of the collision that caused fragmentation
         """
+        future_particle_count = len(self.particles) + self.num_fragments - 1
+        if future_particle_count > self.max_particles:
+            print(f"  -> Fragmentation skipped (would exceed particle limit)")
+            return
         if particle not in self.particles_to_remove:
             self.particles_to_remove.append(particle)
             particle.should_fragment = True
@@ -156,7 +174,7 @@ class DEMSimulation:
         fragments = []
 
         # Calculate fragment properties
-        # Set radius, distribute volume among fragments by area-
+        # Set radius, distribute volume among fragments by area
         original_area = np.pi * particle.radius**2
         fragment_area = original_area / self.num_fragments
         fragment_radius = np.sqrt(fragment_area / np.pi)
@@ -171,11 +189,18 @@ class DEMSimulation:
         # Create fragments around the original particle position
         angle_step = 2 * np.pi / self.num_fragments
 
+        # Energy loss during fragmentation due to breaking bonds
+        fragmentation_efficiency = 0.7  #kinetic energy preservation
+
+        # Calculate how much energy to add from the collision
+        collision_energy = getattr(particle, 'fragment_energy', 0)
+        energy_per_fragment = (collision_energy * (1 - fragmentation_efficiency)) / self.num_fragments  #
+
         for i in range(self.num_fragments):
-            angle = i * angle_step + np.random.uniform(-0.2, 0.2)  # randomizer
+            angle = i * angle_step + np.random.uniform(-0.3, 0.3)  # randomizer
 
             # Offset fragments from center
-            offset_distance = particle.radius * 0.5
+            offset_distance = particle.radius * 0.6
             offset_x = offset_distance * np.cos(angle)
             offset_y = offset_distance * np.sin(angle)
 
@@ -183,10 +208,12 @@ class DEMSimulation:
             frag_x = particle.position[0] + offset_x
             frag_y = particle.position[1] + offset_y
 
-            # inherit parent velocity + radial component
-            radial_speed = np.random.uniform(20, 50)  # Explosion outward
-            frag_vx = particle.velocity[0] + radial_speed * np.cos(angle)
-            frag_vy = particle.velocity[1] + radial_speed * np.sin(angle)
+            # Inherit parent velocity + radial component
+            explosion_speed = np.sqrt(2 * energy_per_fragment / fragment_mass) if fragment_mass > 0 else 30
+            explosion_speed = min(explosion_speed, 80)  # Cap maximum explosion speed
+
+            frag_vx = particle.velocity[0] * fragmentation_efficiency + explosion_speed * np.cos(angle)
+            frag_vy = particle.velocity[1] * fragmentation_efficiency + explosion_speed * np.sin(angle)
 
             # Create fragment
             fragment = Particle(
@@ -248,22 +275,30 @@ class DEMSimulation:
             # Bottom boundary
             if particle.position[1] + particle.radius >= self.height:
                 particle.position[1] = self.height - particle.radius
-                particle.velocity[1] = particle.velocity[1] * self.restitution
+                particle.velocity[1] = -particle.velocity[1] * self.restitution
 
             # Top boundary
             if particle.position[1] - particle.radius <= 0:
                 particle.position[1] = particle.radius
-                particle.velocity[1] = particle.velocity[1] * self.restitution
+                particle.velocity[1] = -particle.velocity[1] * self.restitution
 
             # Right boundary
             if particle.position[0] + particle.radius >= self.width:
                 particle.position[0] = self.width - particle.radius
-                particle.velocity[0] = particle.velocity[0] * self.restitution
+                particle.velocity[0] = -particle.velocity[0] * self.restitution
 
             # Left boundary
             if particle.position[0] - particle.radius <= 0:
                 particle.position[0] = particle.radius
-                particle.velocity[0] = particle.velocity[0] * self.restitution
+                particle.velocity[0] = -particle.velocity[0] * self.restitution
+
+    def calculate_total_kinetic_energy(self):
+        """Calculate total kinetic energy of all particles."""
+        total_ke = 0.0
+        for particle in self.particles:
+            speed_squared = np.dot(particle.velocity, particle.velocity)
+            total_ke += 0.5 * particle.mass * speed_squared
+        return total_ke
 
     def update(self, dt):
         """
@@ -289,7 +324,7 @@ class DEMSimulation:
         self.handle_boundaries()
 
         self.time += dt
-        
+
     def get_particle_count(self):
         """Return the number of particles in the simulation."""
         return len(self.particles)
