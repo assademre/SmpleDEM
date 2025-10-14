@@ -32,7 +32,7 @@ class DEMSimulation:
         self.collision_energies = []
 
         # Sprint 3: Fragmentation parameters
-        self.energy_threshold = 500.0  # Energy required to break a particle
+        self.energy_threshold = 1000.0  # Energy required to break a particle
         self.min_fragment_radius = 5.0  # Minimum size before particles can't break
         self.num_fragments = 3  # Number of fragments per breakage # TODO: Find optimal fragments
         self.total_fragments_created = 0
@@ -117,10 +117,13 @@ class DEMSimulation:
         fragmented = False
         if impact_energy > self.energy_threshold:
             # Mark particles for fragmentation if large enough
-            if p1.radius >= self.min_fragment_radius:
+            fragment_area = (np.pi * p1.radius ** 2) / self.num_fragments
+            min_fragment_radius_calc = np.sqrt(fragment_area / np.pi)
+
+            if min_fragment_radius_calc >= self.min_fragment_radius:
                 self.mark_for_fragmentation(p1, impact_energy)
                 fragmented = True
-            if p2.radius >= self.min_fragment_radius:
+            if min_fragment_radius_calc >= self.min_fragment_radius:
                 self.mark_for_fragmentation(p2, impact_energy)
                 fragmented = True
 
