@@ -5,6 +5,7 @@ import pygame
 import numpy as np
 from simulation import DEMSimulation
 from particle import Particle
+from analytics import SimulationAnalytics, create_gif_from_frames
 
 
 # Constants
@@ -15,8 +16,10 @@ BACKGROUND_COLOR:tuple = (20, 20, 30)
 PARTICLE_COLOR:tuple = (100, 200, 255)
 COLLISION_COLOR:tuple = (255, 100, 100)  # Color red
 GRAVITY:float = 9.81
-STARTING_PARTICLES = 2
+STARTING_PARTICLES = 1
 MAX_PARTICLES = 300
+
+RECORD_GIF = True
 
 
 def main():
@@ -25,14 +28,10 @@ def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Smple DEM Sim")
     clock = pygame.time.Clock()
-    
-    # Initialize simulation
-    sim = DEMSimulation(width=WIDTH, height=HEIGHT, gravity=GRAVITY)
 
-    # sim.add_particle(Particle(x=200, y=50, vx=50, vy=0, radius=15, density=1.0))
-    # sim.add_particle(Particle(x=400, y=100, vx=-30, vy=0, radius=20, density=1.0))
-    # sim.add_particle(Particle(x=600, y=80, vx=-20, vy=50, radius=12, density=1.0))
-    # sim.add_particle(Particle(x=300, y=150, vx=40, vy=20, radius=25, density=1.0))
+    # Initialize simulation and analytics
+    sim = DEMSimulation(width=WIDTH, height=HEIGHT, gravity=GRAVITY)
+    analytics = SimulationAnalytics()
 
     # Addding particles
     sim.max_particles = MAX_PARTICLES
@@ -44,13 +43,13 @@ def main():
         vy = np.random.uniform(0, 50)
         radius = np.random.randint(10, 25)
         sim.add_particle(Particle(x, y, vx, vy, radius, density=1.0))
-    
+
     # Main loop
     running = True
     dt = 1.0 / FPS
 
     info_font = pygame.font.Font(None, 24)
-    
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -69,7 +68,7 @@ def main():
         sim.update(dt)
 
         screen.fill(BACKGROUND_COLOR)
-        
+
         # Draw particles
         for particle in sim.particles:
             pos = (int(particle.position[0]), int(particle.position[1]))
@@ -82,11 +81,11 @@ def main():
                 color = PARTICLE_COLOR
             pygame.draw.circle(screen, color, pos, int(particle.radius))
             pygame.draw.circle(screen, (255, 255, 255), pos, 2)  # center dot
-        
+
         # Info text
         info_text = info_font.render(f"Particles: {sim.get_particle_count()}/{sim.max_particles}", True, (255, 255, 255))
         screen.blit(info_text, (10, 10))
-        
+
         time_text = info_font.render(f"Time: {sim.time:.1f}s", True, (255, 255, 255))
         screen.blit(time_text, (10, 35))
 
@@ -109,15 +108,29 @@ def main():
 
         pygame.display.flip()
         clock.tick(FPS)
-    
+
+        # REcording
+        analytics.record_frame(sim)
+
+        if RECORD_GIF and len(analytics.frames) < 3600:
+            frame_array = pygame.surfarray.array3d(pygame.transform.rotate(screen, -90))
+            frame_array = np.transpose(frame_array, (1, 0, 2))
+            analytics.frames.append(frame_array)
+
     pygame.quit()
-    print(f"\nSimulation Summary")
-    print(f"Total particles: {sim.get_particle_count()}")
-    if hasattr(sim, 'total_collisions'):
-        print(f"Total collisions: {sim.total_collisions}")
-    if hasattr(sim, 'collision_energies') and len(sim.collision_energies) > 0:
-        print(f"Average collision energy: {np.mean(sim.collision_energies):.2f} J")
-        print(f"Max collision energy: {np.max(sim.collision_energies):.2f} J")
+
+    # Generate reports and graphs
+    print(f"\n" + "="*60)
+    print("Generating analytics")
+    print("="*60)
+    analytics.generate_summary_report(sim)
+    analytics.generate_graphs()
+
+    if RECORD_GIF and analytics.frames:
+        print("\nCreating GIF")
+        create_gif_from_frames(analytics.frames, fps=30)
+
+    print(f"\nSimulation Completed")
 
 
 if __name__ == "__main__":
