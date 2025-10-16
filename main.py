@@ -16,7 +16,7 @@ BACKGROUND_COLOR:tuple = (20, 20, 30)
 PARTICLE_COLOR:tuple = (100, 200, 255)
 COLLISION_COLOR:tuple = (255, 100, 100)  # Color red
 GRAVITY:float = 9.81
-STARTING_PARTICLES = 1
+STARTING_PARTICLES =1
 MAX_PARTICLES = 300
 
 RECORD_GIF = True
@@ -41,7 +41,7 @@ def main():
         y = np.random.randint(50, 150)
         vx = np.random.uniform(-50, 50)
         vy = np.random.uniform(0, 50)
-        radius = np.random.randint(10, 25)
+        radius = np.random.randint(20, 30) # to see the effect of PSD
         sim.add_particle(Particle(x, y, vx, vy, radius, density=1.0))
 
     # Main loop
@@ -125,6 +125,7 @@ def main():
     print("="*60)
     analytics.generate_summary_report(sim)
     analytics.generate_graphs()
+    analytics.generate_psd_analysis()
 
     if RECORD_GIF and analytics.frames:
         print("\nCreating GIF")

@@ -32,8 +32,8 @@ class DEMSimulation:
         self.collision_energies = []
 
         # Sprint 3: Fragmentation parameters
-        self.energy_threshold = 1000.0  # Energy required to break a particle
-        self.min_fragment_radius = 5.0  # Minimum size before particles can't break
+        self.energy_threshold = 15000.0  # Energy required to break a particle
+        self.min_fragment_radius = 3.0  # Minimum size before particles can't break
         self.num_fragments = 3  # Number of fragments per breakage # TODO: Find optimal fragments
         self.total_fragments_created = 0
         self.particles_to_add = []  # Buffer for new fragments
@@ -100,8 +100,13 @@ class DEMSimulation:
             return
 
         # Calculate impact energy
-        reduced_mass = (p1.mass * p2.mass) / (p1.mass + p2.mass)
-        impact_energy = 0.5 * reduced_mass * np.linalg.norm(relative_velocity)**2
+        # using kinetic energy instead
+        ke1 = 0.5 * p1.mass * np.linalg.norm(p1.velocity) ** 2
+        ke2 = 0.5 * p2.mass * np.linalg.norm(p2.velocity) ** 2
+        impact_energy = ke1 + ke2
+
+        # reduced_mass = (p1.mass * p2.mass) / (p1.mass + p2.mass)
+        # impact_energy = 0.5 * reduced_mass * np.linalg.norm(relative_velocity)**2
 
         # Store energy in both particles
         p1.collision_energy = impact_energy
