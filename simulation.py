@@ -2,17 +2,67 @@
 """
 import numpy as np
 from particle import Particle
+from collections import defaultdict
+
+
+class SpatialHashGrid:
+    """
+    Spatial hash grid for fast neighbor finding. Thanks Claud!
+    """
+
+    def __init__(self, cell_size):
+        """
+        Initialize spatial hash grid.
+
+        Args:
+            cell_size: Size of each grid cell (should be ~2x max particle radius)
+        """
+        self.cell_size = cell_size
+        self.grid = defaultdict(list)
+
+    def clear(self):
+        """Clear the grid for next frame"""
+        self.grid.clear()
+
+    def _hash(self, x, y):
+        """Convert world position to grid cell coordinates"""
+        cell_x = int(x // self.cell_size)
+        cell_y = int(y // self.cell_size)
+        return cell_x, cell_y
+
+    def insert(self, particle):
+        """Insert particle into grid"""
+        cell = self._hash(particle.position[0], particle.position[1])
+        self.grid[cell].append(particle)
+
+    def get_nearby_particles(self, particle):
+        """
+        Get all particles in neighboring cells (including same cell).
+        Only checks 9 cells instead of all particles.
+        """
+        px, py = particle.position
+        cell_x, cell_y = self._hash(px, py)
+
+        nearby = []
+        # Check 3x3 neighborhood around particle
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                neighbor_cell = (cell_x + dx, cell_y + dy)
+                if neighbor_cell in self.grid:
+                    nearby.extend(self.grid[neighbor_cell])
+
+        return nearby
 
 
 class DEMSimulation:
     """
     DEM simulation with particles and gravity.
     """
-    
+
     def __init__(self, width=800, height=600, gravity=9.81):
         """
         Initializing the simulation.
-        
+
         Args:
             width: Simualtion area width
             height: Simualtion area width
@@ -23,10 +73,10 @@ class DEMSimulation:
         self.gravity = gravity * 100
         self.particles = []
         self.time = 0.0
-        
+
         # Coefficient of restitution (COR) # TODO: Check https://www.sciencedirect.com/science/article/abs/pii/S0921883121000698
         self.restitution = 0.8
-        
+
         # Sprint 2: Collision tracking
         self.total_collisions = 0
         self.collision_energies = []
@@ -57,8 +107,7 @@ class DEMSimulation:
         for particle in self.particles:
             particle.apply_force(gravity_force * particle.mass, dt)
 
-
-    def detect_collision(self, p1, p2): # can be static tho
+    def detect_collision(self, p1, p2):
         """
         Check if two particles are colliding.
         Args:
@@ -67,8 +116,18 @@ class DEMSimulation:
         Returns:
             bool: True if particles overlap
         """
-        distance = np.linalg.norm(p1.position - p2.position)
-        return distance < (p1.radius + p2.radius)
+        # Bounding box check. Seems like the cheapest option
+        dx = abs(p1.position[0] - p2.position[0])
+        dy = abs(p1.position[1] - p2.position[1])
+        sum_radii = p1.radius + p2.radius
+
+        # Early exit if definitely not colliding
+        if dx > sum_radii or dy > sum_radii:
+            return False
+
+        # Only calculate expensive distance if needed
+        distance_squared = dx*dx + dy*dy
+        return distance_squared < sum_radii * sum_radii
 
     def resolve_collision(self, p1, p2):
         """
@@ -245,15 +304,24 @@ class DEMSimulation:
         Process all particles marked for fragmentation.
         Remove broken particles and add their fragments.
         """
-        # Remove broken particles and create fragments
+        if not self.particles_to_remove:
+            return
+
+        # Build set for O(1) lookup instead of O(n) list operations
+        to_remove_set = set(self.particles_to_remove)
+
+        # Create all fragments first
+        new_fragments = []
         for particle in self.particles_to_remove:
             if particle in self.particles:
                 fragments = self.fragment_particle(particle)
-                self.particles_to_add.extend(fragments)
-                self.particles.remove(particle)
+                new_fragments.extend(fragments)
+
+        # Filter particles in one operation
+        self.particles = [p for p in self.particles if p not in to_remove_set]
 
         # Add new fragments
-        self.particles.extend(self.particles_to_add)
+        self.particles.extend(new_fragments)
 
         # Clear buffers
         self.particles_to_remove.clear()
@@ -261,19 +329,45 @@ class DEMSimulation:
 
     def handle_particle_collisions(self):
         """
-        Check and resolve all particle to particle collisions.
+        Check and resolve all particle-to-particle collisions.
         """
         # Reset collision flags
         for particle in self.particles:
             particle.in_collision = False
             particle.collision_energy = 0.0
 
-        # Check all pairs of particles
-        n = len(self.particles)
-        for i in range(n):
-            for j in range(i + 1, n):
-                if self.detect_collision(self.particles[i], self.particles[j]):
-                    self.resolve_collision(self.particles[i], self.particles[j])
+        # Early exit if too few particles
+        if len(self.particles) < 2:
+            return
+
+        # Build spatial hash grid
+        max_radius = max((p.radius for p in self.particles), default=10)
+        cell_size = max_radius * 2.5
+
+        grid = SpatialHashGrid(cell_size)
+        for particle in self.particles:
+            grid.insert(particle)
+
+        # Check collisions only within nearby cells
+        checked_pairs = set()
+
+        for particle in self.particles:
+            nearby = grid.get_nearby_particles(particle)
+
+            for other in nearby:
+                # Skip self
+                if particle is other:
+                    continue
+
+                # Avoid checking same pair twice using unique IDs
+                pair = tuple(sorted([id(particle), id(other)]))
+                if pair in checked_pairs:
+                    continue
+                checked_pairs.add(pair)
+
+                # Check collision
+                if self.detect_collision(particle, other):
+                    self.resolve_collision(particle, other)
 
     def handle_boundaries(self):
         """
@@ -325,7 +419,7 @@ class DEMSimulation:
         # Handle particle collisions
         self.handle_particle_collisions()
 
-        # Sprint 3: Process fragmentations
+        # Process fragmentations
         self.process_fragmentations()
 
         # Handle boundary collisions
