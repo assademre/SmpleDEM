@@ -7,7 +7,7 @@ from collections import defaultdict
 
 class SpatialHashGrid:
     """
-    Spatial hash grid for fast neighbor finding. Thanks Claud!
+    Spatial hash grid for fast neighbor finding.
     """
 
     def __init__(self, cell_size):
@@ -159,13 +159,13 @@ class DEMSimulation:
             return
 
         # Calculate impact energy
-        # using kinetic energy instead
-        ke1 = 0.5 * p1.mass * np.linalg.norm(p1.velocity) ** 2
-        ke2 = 0.5 * p2.mass * np.linalg.norm(p2.velocity) ** 2
-        impact_energy = ke1 + ke2
+        # # using kinetic energy instead
+        # ke1 = 0.5 * p1.mass * np.linalg.norm(p1.velocity) ** 2
+        # ke2 = 0.5 * p2.mass * np.linalg.norm(p2.velocity) ** 2
+        # impact_energy = ke1 + ke2
 
-        # reduced_mass = (p1.mass * p2.mass) / (p1.mass + p2.mass)
-        # impact_energy = 0.5 * reduced_mass * np.linalg.norm(relative_velocity)**2
+        reduced_mass = (p1.mass * p2.mass) / (p1.mass + p2.mass)
+        impact_energy = 0.5 * reduced_mass * np.linalg.norm(relative_velocity)**2
 
         # Store energy in both particles
         p1.collision_energy = impact_energy
@@ -257,11 +257,12 @@ class DEMSimulation:
         angle_step = 2 * np.pi / self.num_fragments
 
         # Energy loss during fragmentation due to breaking bonds
-        fragmentation_efficiency = 0.7  #kinetic energy preservation
+        fragmentation_efficiency = 0.7  # kinetic energy preservation
 
         # Calculate how much energy to add from the collision
         collision_energy = getattr(particle, 'fragment_energy', 0)
-        energy_per_fragment = (collision_energy * (1 - fragmentation_efficiency)) / self.num_fragments  #
+        available_energy = collision_energy * fragmentation_efficiency
+        energy_per_fragment = available_energy / self.num_fragments
 
         for i in range(self.num_fragments):
             angle = i * angle_step + np.random.uniform(-0.3, 0.3)  # randomizer
