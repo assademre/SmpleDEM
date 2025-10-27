@@ -267,6 +267,8 @@ class SimulationAnalytics:
             f.write(f"Fragments per Break: {sim.num_fragments}\n")
             f.write(f"Max Particles: {sim.max_particles}\n")
             f.write(f"Gravity: {sim.gravity / 100:.2f} m/s^2\n")
+            f.write(f"\nEnergy Conservation:\n")
+            f.write(f"Total energy lost to fragmentation: {sim.energy_lost_to_fragmentation:.2f} J\n")
 
         print(f"Report saved to: {report_path}")
         return report_path

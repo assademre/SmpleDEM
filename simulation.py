@@ -240,6 +240,8 @@ class DEMSimulation:
         """
         fragments = []
 
+        energy_before = 0.5 * particle.mass * np.dot(particle.velocity, particle.velocity)
+
         # Calculate fragment properties
         # Set radius, distribute volume among fragments by area
         original_area = np.pi * particle.radius**2
@@ -294,6 +296,9 @@ class DEMSimulation:
             )
 
             fragments.append(fragment)
+
+        energy_after = sum(0.5 * f.mass * np.dot(f.velocity, f.velocity) for f in fragments)
+        self.energy_lost_to_fragmentation += (energy_before - energy_after)
 
         self.total_fragments_created += self.num_fragments
         print(f"  -> Fragmentation occured. Particle (r={particle.radius:.1f}) broke into {self.num_fragments} fragments (r={fragment_radius:.1f} each)")
@@ -402,6 +407,22 @@ class DEMSimulation:
             speed_squared = np.dot(particle.velocity, particle.velocity)
             total_ke += 0.5 * particle.mass * speed_squared
         return total_ke
+
+    def calculate_total_energy(self):
+        """Calculate total mechanical energy (kinetic + gravitational potential)"""
+        total_ke = 0.0
+        total_pe = 0.0
+
+        for particle in self.particles:
+            # Kinetic energy
+            speed_squared = np.dot(particle.velocity, particle.velocity)
+            total_ke += 0.5 * particle.mass * speed_squared
+
+            # Gravitational potential energy (reference at bottom)
+            height = self.height - particle.position[1]
+            total_pe += particle.mass * self.gravity * height
+
+        return total_ke + total_pe
 
     def update(self, dt):
         """
