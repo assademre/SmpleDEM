@@ -6,6 +6,7 @@ import numpy as np
 from simulation import DEMSimulation
 from particle import Particle
 from analytics import SimulationAnalytics, create_gif_from_frames
+from materials import list_material_names
 
 
 # Constants
@@ -20,6 +21,8 @@ STARTING_PARTICLES = 1
 MAX_PARTICLES = 500
 
 RECORD_GIF = False
+MATERIAL_OPTIONS = list_material_names()
+MAX_VISUAL_ENERGY = 1500.0
 
 
 def main():
@@ -42,7 +45,9 @@ def main():
         vx = np.random.uniform(-50, 50)
         vy = np.random.uniform(0, 50)
         radius = np.random.randint(20, 30) # to see the effect of PSD
-        sim.add_particle(Particle(x, y, vx, vy, radius, density=1.0))
+        material = np.random.choice(MATERIAL_OPTIONS)
+        sim.add_particle(Particle(x, y, vx, vy, radius, material=material))
+        print(f"  -> Particle #{i+1} material: {material}")
 
     # Main loop
     running = True
@@ -63,7 +68,8 @@ def main():
                     vx = np.random.uniform(-50, 50)
                     vy = np.random.uniform(0, 50)
                     radius = np.random.randint(10, 25)
-                    sim.add_particle(Particle(x, y, vx, vy, radius, density=1.0))
+                    material = np.random.choice(MATERIAL_OPTIONS)
+                    sim.add_particle(Particle(x, y, vx, vy, radius, material=material))
 
         sim.update(dt)
 
@@ -73,12 +79,17 @@ def main():
         for particle in sim.particles:
             pos = (int(particle.position[0]), int(particle.position[1]))
 
+            base_color = getattr(particle, 'material_color', PARTICLE_COLOR)
             if hasattr(particle, 'in_collision') and particle.in_collision:
-                energy = min(particle.collision_energy, 1000.0) if hasattr(particle, 'collision_energy') else 0
-                intensity = int(255 * (energy / 1000.0))
-                color = (255, 255 - intensity, 255 - intensity)
+                energy = min(particle.collision_energy, MAX_VISUAL_ENERGY) if hasattr(particle, 'collision_energy') else 0
+                intensity = energy / MAX_VISUAL_ENERGY if MAX_VISUAL_ENERGY > 0 else 0
+                color = (
+                    min(255, int(base_color[0] + (COLLISION_COLOR[0] - base_color[0]) * intensity)),
+                    max(0, int(base_color[1] * (1 - intensity))),
+                    max(0, int(base_color[2] * (1 - intensity))),
+                )
             else:
-                color = PARTICLE_COLOR
+                color = base_color
             pygame.draw.circle(screen, color, pos, int(particle.radius))
             pygame.draw.circle(screen, (255, 255, 255), pos, 2)  # center dot
 

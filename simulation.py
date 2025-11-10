@@ -177,18 +177,11 @@ class DEMSimulation:
         self.total_collisions += 1
         self.collision_energies.append(impact_energy)
 
-        # Check for fragmentation
+        # Check for fragmentation using per-material thresholds
         fragmented = False
-        if impact_energy > self.energy_threshold:
-            # Mark particles for fragmentation if large enough
-            fragment_area = (np.pi * p1.radius ** 2) / self.num_fragments
-            min_fragment_radius_calc = np.sqrt(fragment_area / np.pi)
-
-            if min_fragment_radius_calc >= self.min_fragment_radius:
-                self.mark_for_fragmentation(p1, impact_energy)
-                fragmented = True
-            if min_fragment_radius_calc >= self.min_fragment_radius:
-                self.mark_for_fragmentation(p2, impact_energy)
+        for candidate in (p1, p2):
+            if self.should_fragment(candidate, impact_energy):
+                self.mark_for_fragmentation(candidate, impact_energy)
                 fragmented = True
 
         if impact_energy > 100 or fragmented:  # high energy collisions and fragmentations
@@ -228,6 +221,30 @@ class DEMSimulation:
             self.particles_to_remove.append(particle)
             particle.should_fragment = True
             particle.fragment_energy = impact_energy
+
+    def should_fragment(self, particle, impact_energy):
+        """Return True if this particle should fragment for the given impact energy."""
+        if particle is None:
+            return False
+
+        threshold = self.get_particle_energy_threshold(particle)
+        if impact_energy <= threshold:
+            return False
+
+        fragment_area = (np.pi * particle.radius ** 2) / max(self.num_fragments, 1)
+        min_fragment_radius_calc = np.sqrt(fragment_area / np.pi)
+        if min_fragment_radius_calc < self.min_fragment_radius:
+            return False
+
+        return True
+
+    def get_particle_energy_threshold(self, particle):
+        """Scale the global energy threshold by the particle's material factor."""
+        if particle is None:
+            return self.energy_threshold
+
+        factor = getattr(particle, "breakage_factor", 1.0)
+        return self.energy_threshold * factor
 
     def fragment_particle(self, particle):
         """
@@ -292,7 +309,8 @@ class DEMSimulation:
                 vx=frag_vx,
                 vy=frag_vy,
                 radius=fragment_radius,
-                density=fragment_density
+                density=fragment_density,
+                material=getattr(particle, "material", "rock"),
             )
 
             fragments.append(fragment)
